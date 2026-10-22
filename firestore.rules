@@ -1,0 +1,172 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'chhnchhin94@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // User Profile Validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'role']) &&
+             data.keys().hasOnly(['uid', 'displayName', 'photoURL', 'bio', 'role', 'email', 'subscribersCount', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000)) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 255)) &&
+             (!('subscribersCount' in data) || data.subscribersCount is number);
+    }
+
+    // Video Document Validation
+    function isValidVideo(data) {
+      return data.keys().hasAll(['ownerId', 'title', 'playbackUrl', 'type', 'visibility']) &&
+             data.keys().hasOnly(['ownerId', 'title', 'description', 'thumbnailUrl', 'storagePath', 'playbackUrl', 'type', 'category', 'visibility', 'viewCount', 'likesCount', 'commentsCount', 'duration', 'createdAt']) &&
+             data.ownerId == request.auth.uid &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.playbackUrl is string && data.playbackUrl.size() <= 2000 &&
+             (data.type == 'long' || data.type == 'short') &&
+             (data.visibility == 'public' || data.visibility == 'unlisted' || data.visibility == 'private') &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 5000)) &&
+             (!('thumbnailUrl' in data) || (data.thumbnailUrl is string && data.thumbnailUrl.size() <= 2000)) &&
+             (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 1000)) &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
+             (!('viewCount' in data) || data.viewCount is number) &&
+             (!('likesCount' in data) || data.likesCount is number) &&
+             (!('commentsCount' in data) || data.commentsCount is number) &&
+             (!('duration' in data) || data.duration is number);
+    }
+
+    // Comment Document Validation
+    function isValidComment(data) {
+      return data.keys().hasAll(['authorId', 'text']) &&
+             data.keys().hasOnly(['authorId', 'authorName', 'authorPhotoURL', 'text', 'likesCount', 'createdAt']) &&
+             data.authorId == request.auth.uid &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 1000 &&
+             (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 100)) &&
+             (!('authorPhotoURL' in data) || (data.authorPhotoURL is string && data.authorPhotoURL.size() <= 1000)) &&
+             (!('likesCount' in data) || data.likesCount is number);
+    }
+
+    // Match Users Collection
+    match /users/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if isValidId(userId) && request.auth.uid == userId;
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUser(incoming()) && incoming().role == 'user';
+      allow update: if isValidId(userId) && (
+        isAdmin() ||
+        (isOwner(userId) && isValidUser(incoming()) && incoming().role == existing().role && incoming().uid == existing().uid)
+      );
+      allow delete: if isValidId(userId) && isAdmin();
+
+      // Following Subcollection
+      match /following/{creatorId} {
+        allow read: if isValidId(userId);
+        allow create: if isValidId(userId) && isOwner(userId) && isValidId(creatorId) &&
+                         incoming().creatorId == creatorId;
+        allow delete: if isValidId(userId) && isOwner(userId) && isValidId(creatorId);
+      }
+    }
+
+    // Match Videos Collection
+    match /videos/{videoId} {
+      allow get: if isValidId(videoId) && (
+        resource.data.visibility == 'public' ||
+        resource.data.visibility == 'unlisted' ||
+        isOwner(resource.data.ownerId) ||
+        isAdmin()
+      );
+      allow list: if resource.data.visibility == 'public' ||
+                     (isSignedIn() && resource.data.ownerId == request.auth.uid) ||
+                     isAdmin();
+
+      allow create: if isValidId(videoId) && isSignedIn() && isValidVideo(incoming());
+
+      allow update: if isValidId(videoId) && (
+        isAdmin() ||
+        (
+          isOwner(existing().ownerId) &&
+          incoming().ownerId == existing().ownerId &&
+          isValidVideo(incoming())
+        ) ||
+        (
+          // Interaction counter increment action
+          isSignedIn() &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['viewCount', 'likesCount', 'commentsCount'])
+        )
+      );
+
+      allow delete: if isValidId(videoId) && (isOwner(existing().ownerId) || isAdmin());
+
+      // Comments Subcollection
+      match /comments/{commentId} {
+        allow read: if isValidId(videoId) && isValidId(commentId);
+        allow create: if isValidId(videoId) && isValidId(commentId) && isSignedIn() &&
+                         isValidComment(incoming()) &&
+                         exists(/databases/$(database)/documents/videos/$(videoId));
+        allow update: if isValidId(videoId) && isValidId(commentId) && (
+          isAdmin() ||
+          (isOwner(existing().authorId) && isValidComment(incoming()) && incoming().authorId == existing().authorId) ||
+          (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['likesCount']))
+        );
+        allow delete: if isValidId(videoId) && isValidId(commentId) && (
+          isOwner(existing().authorId) ||
+          isOwner(get(/databases/$(database)/documents/videos/$(videoId)).data.ownerId) ||
+          isAdmin()
+        );
+      }
+
+      // Likes Subcollection
+      match /likes/{userId} {
+        allow read: if isValidId(videoId) && isValidId(userId);
+        allow create: if isValidId(videoId) && isValidId(userId) && isOwner(userId) &&
+                         exists(/databases/$(database)/documents/videos/$(videoId));
+        allow delete: if isValidId(videoId) && isValidId(userId) && (isOwner(userId) || isAdmin());
+      }
+    }
+
+    // Match Reports Collection
+    match /reports/{reportId} {
+      allow create: if isValidId(reportId) && isSignedIn() &&
+                       incoming().reporterId == request.auth.uid &&
+                       incoming().status == 'pending' &&
+                       incoming().reason is string && incoming().reason.size() <= 500 &&
+                       isValidId(incoming().videoId);
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Admin whitelist collection
+    match /admins/{adminId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

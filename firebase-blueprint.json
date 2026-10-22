@@ -1,0 +1,265 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document storing public credentials, channel info, and role permissions.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique identifier of the user matching request.auth.uid",
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User channel or display name",
+          "maxLength": 100
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL to the user avatar image",
+          "maxLength": 1000
+        },
+        "bio": {
+          "type": "string",
+          "description": "Short channel bio or creator description",
+          "maxLength": 500
+        },
+        "role": {
+          "type": "string",
+          "description": "User security role",
+          "enum": ["user", "creator", "admin"]
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 255
+        },
+        "subscribersCount": {
+          "type": "number",
+          "description": "Total followers/subscribers count"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp or server timestamp of user creation"
+        }
+      },
+      "required": ["uid", "displayName", "role"]
+    },
+    "Video": {
+      "title": "Video",
+      "description": "Long-form or vertical short video record with streaming metadata and engagement counts.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "UID of the creator who published the video",
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the video in Khmer or English",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "description": "Video description, notes, and hashtags",
+          "maxLength": 5000
+        },
+        "thumbnailUrl": {
+          "type": "string",
+          "description": "Direct image URL for video poster / thumbnail preview",
+          "maxLength": 2000
+        },
+        "storagePath": {
+          "type": "string",
+          "description": "Storage bucket path or relative path to the object in storage",
+          "maxLength": 1000
+        },
+        "playbackUrl": {
+          "type": "string",
+          "description": "Streaming or playback URL for the HTML5 video player",
+          "maxLength": 2000
+        },
+        "type": {
+          "type": "string",
+          "description": "Video aspect ratio and type format",
+          "enum": ["long", "short"]
+        },
+        "category": {
+          "type": "string",
+          "description": "Category name for filtering and discovery",
+          "maxLength": 50
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Video visibility access level",
+          "enum": ["public", "unlisted", "private"]
+        },
+        "viewCount": {
+          "type": "number",
+          "description": "Number of times the video has been viewed"
+        },
+        "likesCount": {
+          "type": "number",
+          "description": "Total like reactions count"
+        },
+        "commentsCount": {
+          "type": "number",
+          "description": "Total top-level comments count"
+        },
+        "duration": {
+          "type": "number",
+          "description": "Length in seconds"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Server timestamp of publication"
+        }
+      },
+      "required": ["ownerId", "title", "playbackUrl", "type", "visibility"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "User comment under a video.",
+      "type": "object",
+      "properties": {
+        "authorId": {
+          "type": "string",
+          "description": "UID of the comment creator",
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Cached display name of the commenter",
+          "maxLength": 100
+        },
+        "authorPhotoURL": {
+          "type": "string",
+          "description": "Avatar URL of commenter",
+          "maxLength": 1000
+        },
+        "text": {
+          "type": "string",
+          "description": "Comment message body",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "likesCount": {
+          "type": "number",
+          "description": "Comment likes count"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of comment creation"
+        }
+      },
+      "required": ["authorId", "text"]
+    },
+    "Like": {
+      "title": "Like",
+      "description": "Individual like vote record for idempotent voting.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of user who liked the video",
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when like was registered"
+        }
+      },
+      "required": ["userId"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "Channel subscription record between user and creator.",
+      "type": "object",
+      "properties": {
+        "creatorId": {
+          "type": "string",
+          "description": "UID of the creator being followed",
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when followed"
+        }
+      },
+      "required": ["creatorId"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Moderation flag report submitted by viewers.",
+      "type": "object",
+      "properties": {
+        "reporterId": {
+          "type": "string",
+          "description": "UID of the reporting user",
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "videoId": {
+          "type": "string",
+          "description": "Target video ID being reported",
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for moderation report",
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "description": "Moderation review status",
+          "enum": ["pending", "reviewed", "dismissed"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp report was submitted"
+        }
+      },
+      "required": ["reporterId", "videoId", "reason", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": {
+        "$ref": "User"
+      },
+      "description": "User profile collection containing channel settings and permissions"
+    },
+    "/videos/{videoId}": {
+      "schema": {
+        "$ref": "Video"
+      },
+      "description": "Primary video collection for both long-form videos and vertical shorts"
+    },
+    "/videos/{videoId}/comments/{commentId}": {
+      "schema": {
+        "$ref": "Comment"
+      },
+      "description": "Comments left on a specific video"
+    },
+    "/videos/{videoId}/likes/{userId}": {
+      "schema": {
+        "$ref": "Like"
+      },
+      "description": "Idempotent like records keyed by the user UID"
+    },
+    "/users/{uid}/following/{creatorId}": {
+      "schema": {
+        "$ref": "Follow"
+      },
+      "description": "Creators followed by a user"
+    },
+    "/reports/{reportId}": {
+      "schema": {
+        "$ref": "Report"
+      },
+      "description": "User reports for moderation review by platform admins"
+    }
+  }
+}
